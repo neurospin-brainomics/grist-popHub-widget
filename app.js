@@ -139,6 +139,24 @@ grist.onRecords(async function(records) {
             card.appendChild(attachment);
         }
 
+        // =========================
+        // Open record button
+        // =========================
+
+        const openButton = document.createElement("button");
+
+        openButton.className = "open-record";
+        openButton.textContent = "Ouvrir";
+
+        openButton.addEventListener("click", async function() {
+
+            await grist.setCursorPos({
+                rowId: record.id
+            });
+
+        });
+
+        card.appendChild(openButton);
 
         container.appendChild(card);
     }
