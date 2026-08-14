@@ -1,5 +1,3 @@
-
-console.log("Grist widget loaded");
 grist.ready({
     columns: [
         "Name",
@@ -21,14 +19,21 @@ grist.onRecords(async function(records) {
 
     container.innerHTML = "";
 
+    // Get a read-only token once for all attachments
+    const tokenInfo = await grist.docApi.getAccessToken({
+        readOnly: true
+    });
+
+
     for (const record of records) {
 
         const card = document.createElement("div");
         card.className = "resource-card";
 
-        // -------------------------
+
+        // =========================
         // Header
-        // -------------------------
+        // =========================
 
         const header = document.createElement("div");
         header.className = "resource-header";
@@ -47,9 +52,9 @@ grist.onRecords(async function(records) {
         card.appendChild(header);
 
 
-        // -------------------------
+        // =========================
         // Description
-        // -------------------------
+        // =========================
 
         if (record.Description) {
 
@@ -62,9 +67,9 @@ grist.onRecords(async function(records) {
         }
 
 
-        // -------------------------
+        // =========================
         // Metadata
-        // -------------------------
+        // =========================
 
         const meta = document.createElement("div");
         meta.className = "resource-meta";
@@ -94,9 +99,9 @@ grist.onRecords(async function(records) {
         }
 
 
-        // -------------------------
+        // =========================
         // Attachment
-        // -------------------------
+        // =========================
 
         if (
             record.PieceJointe &&
@@ -105,55 +110,53 @@ grist.onRecords(async function(records) {
 
             const attachmentId = record.PieceJointe[0];
 
+            const url =
+                `${tokenInfo.baseUrl}/attachments/${attachmentId}/download?auth=${tokenInfo.token}`;
+
             console.log(
-                "Attachment ID:",
-                attachmentId
+                "Attachment nouv URL generated for",
+                record.Name
             );
 
-            const attachment = document.createElement("div");
 
+            const attachment = document.createElement("div");
             attachment.className = "attachment";
+
 
             const image = document.createElement("img");
 
+            image.src = url;
             image.alt = record.Name || "Attachment";
 
-            image.style.maxWidth = "100%";
+            image.style.width = "100%";
             image.style.maxHeight = "180px";
             image.style.objectFit = "contain";
+            image.style.display = "block";
             image.style.marginTop = "10px";
 
-            try {
 
-                const url =
-                    await grist.docApi.getAttachmentUrl(
-                        attachmentId
-                    );
-
-                console.log(
-                    "Attachment URL:",
-                    url
-                );
-
-                image.src = url;
-
-                attachment.appendChild(image);
-
-            } catch (error) {
-
-                console.error(
-                    "Unable to load attachment:",
-                    error
-                );
-
-                attachment.textContent =
-                    "📎 Pièce jointe";
-
-            }
-
+            attachment.appendChild(image);
             card.appendChild(attachment);
         }
 
+        // =========================
+        // Open record button
+        // =========================
+
+        const openButton = document.createElement("button");
+
+        openButton.className = "open-record";
+        openButton.textContent = "Ouvrir";
+
+        openButton.addEventListener("click", async function() {
+
+            await grist.setCursorPos({
+                rowId: record.id
+            });
+
+        });
+
+        card.appendChild(openButton);
 
         container.appendChild(card);
     }
