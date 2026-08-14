@@ -114,7 +114,7 @@ grist.onRecords(async function(records) {
                 `${tokenInfo.baseUrl}/attachments/${attachmentId}/download?auth=${tokenInfo.token}`;
 
             console.log(
-                "Attachment URL generated for",
+                "Attachment nouv URL generated for",
                 record.Name
             );
 
