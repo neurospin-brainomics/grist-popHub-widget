@@ -152,6 +152,8 @@ grist.onRecords(async function(records) {
 
         openButton.addEventListener("click", async function() {
 
+            console.log("Opening Resource:", record.id, record.Name);
+
             await grist.setCursorPos({
                 rowId: record.id
             });
