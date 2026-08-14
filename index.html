@@ -1,18 +1,38 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Mes infos</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        #status {
+            padding: 10px;
+            background: #f0f0f0;
+        }
+    </style>
 </head>
 
 <body>
 
-<h1>Mes informations à moi</h1>
+    <h1>Mes informations à moi</h1>
 
-<div id="content"></div>
+    <div id="status">
+        Widget chargé.
+    </div>
 
-<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
-<script src="app.js"></script>
+    <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+    <script src="app.js"></script>
 
 </body>
 </html>
