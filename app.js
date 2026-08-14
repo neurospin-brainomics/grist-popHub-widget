@@ -1,7 +1,17 @@
 
 console.log("Grist widget loaded");
 
-grist.ready();
+grist.ready({
+    columns: [
+        "Name",
+        "Owner",
+        "Description",
+        "Category",
+        "Provider",
+        "PieceJointe"
+    ],
+    requiredAccess: "read table"
+});
 
 grist.onRecords(function(records) {
 
