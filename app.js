@@ -8,6 +8,8 @@ grist.ready({
         "PieceJointe"
     ],
     requiredAccess: "read table"
+    
+    allowSelectBy: true
 });
 
 
