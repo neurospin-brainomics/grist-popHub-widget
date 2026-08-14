@@ -1,3 +1,6 @@
+
+console.log("Grist widget loaded");
+
 grist.ready({
     columns: [
         "Name",
