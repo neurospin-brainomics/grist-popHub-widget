@@ -7,7 +7,7 @@ grist.ready({
         "Provider",
         "PieceJointe"
     ],
-    requiredAccess: "read table"
+    requiredAccess: "read table",
     
     allowSelectBy: true
 });
