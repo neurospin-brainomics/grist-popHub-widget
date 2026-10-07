@@ -31,9 +31,9 @@ function el(tag, className, text) {
     return node;
 }
 
-function isHeading(record) {
-    return String(record[SLOTS.type] || "").trim().toLowerCase() === "heading";
-}
+// function isHeading(record) {
+//     return String(record[SLOTS.type] || "").trim().toLowerCase() === "heading";
+// }
 
 // A Reference cell arrives as a row id; 0, null or "" means "no predecessor"
 function predecessorId(record) {
@@ -69,7 +69,8 @@ function buildSubchunks(records) {
     const visited = new Set();
     const subchunks = [];
 
-    const headings = records.filter(r => isHeading(r) && !predecessorId(r));
+    const headings = records.filter(r => !predecessorId(r));
+    //const headings = records.filter(r => isHeading(r) && !predecessorId(r));
 
     for (const heading of headings) {
 
