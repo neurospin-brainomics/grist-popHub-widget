@@ -17,7 +17,7 @@ grist.ready({
         SLOTS.type,
         SLOTS.dependOn,
         { name: SLOTS.project, optional: true },
-        { name: SLOTS.dueDate, optional: true }
+        { name: SLOTS.startDate, optional: true }
     ],
     requiredAccess: "read table",
     allowSelectBy: true
@@ -31,14 +31,15 @@ function el(tag, className, text) {
     return node;
 }
 
-// function isHeading(record) {
-//     return String(record[SLOTS.type] || "").trim().toLowerCase() === "heading";
-// }
-
-// A Reference cell arrives as a row id; 0, null or "" means "no predecessor"
+// The grist plugin API decodes a Reference cell into a Reference object
+// ({ tableId, rowId }), not a plain number. An empty reference has rowId 0.
+// Plain numbers / numeric text are accepted too.
+// Anything unreadable gives 0 ("no predecessor").
 function predecessorId(record) {
     const value = record[SLOTS.dependOn];
-    return value ? Number(value) : 0;
+    const raw = (value !== null && typeof value === "object") ? value.rowId : value;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 // Grist Date cells arrive as seconds since epoch (or as a Date object)
@@ -51,7 +52,7 @@ function formatDate(value) {
 
 
 // Group the rows into subchunks.
-// A subchunk starts at a Heading row (type = "Heading", no predecessor)
+// A subchunk starts at a row with no predecessor (dependDe empty)
 // and contains every row reachable by following the chain forward
 // (a row whose dependDe points to a row already in the subchunk).
 function buildSubchunks(records) {
@@ -70,7 +71,6 @@ function buildSubchunks(records) {
     const subchunks = [];
 
     const headings = records.filter(r => !predecessorId(r));
-    //const headings = records.filter(r => isHeading(r) && !predecessorId(r));
 
     for (const heading of headings) {
 
@@ -94,7 +94,7 @@ function buildSubchunks(records) {
         subchunks.push({ heading, tasks: members.slice(1) });
     }
 
-    // Rows not reachable from any heading (broken chain, missing heading...)
+    // Rows not reachable from any chain start (e.g. a cycle with no root)
     const orphans = records.filter(r => !visited.has(r.id));
 
     return { subchunks, orphans };
@@ -117,7 +117,7 @@ function buildSubchunkCard(subchunk) {
 
     // Metadata: start date and number of tasks
     const meta = el("div", "resource-meta");
-    const start = formatDate(heading[SLOTS.dueDate]);
+    const start = formatDate(heading[SLOTS.startDate]);
     if (start) meta.appendChild(el("div", null, "Début : " + start));
     meta.appendChild(el("div", null, subchunk.tasks.length + " tâche(s)"));
     card.appendChild(meta);
@@ -143,12 +143,6 @@ function buildSubchunkCard(subchunk) {
 
 grist.onRecords(function (records) {
 
-    console.table(records.map(r => ({
-    id: r.id,
-    dependDe: r[SLOTS.dependOn],
-    type_de_dependDe: typeof r[SLOTS.dependOn]
-})));
-    
     const container = document.getElementById("resources");
 
     if (!records || records.length === 0) {
@@ -162,7 +156,7 @@ grist.onRecords(function (records) {
 
     if (subchunks.length === 0) {
         container.replaceChildren(
-            el("div", "empty-state", "Aucun groupe (type = Heading) trouvé")
+            el("div", "empty-state", "Aucun groupe trouvé (aucune ligne sans prédécesseur)")
         );
         return;
     }
@@ -175,7 +169,7 @@ grist.onRecords(function (records) {
 
     if (orphans.length > 0) {
         console.warn(
-            orphans.length + " ligne(s) non rattachée(s) à un Heading:",
+            orphans.length + " ligne(s) non rattachée(s) à un groupe:",
             orphans.map(r => r.id)
         );
     }
