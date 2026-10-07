@@ -142,7 +142,7 @@ function buildSubchunkCard(subchunk) {
 
 
 grist.onRecords(function (records) {
-
+    console.log(records.map(r => [r.id, r[SLOTS.dependOn], typeof r[SLOTS.dependOn]]));
     const container = document.getElementById("resources");
 
     if (!records || records.length === 0) {
