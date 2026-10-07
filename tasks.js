@@ -119,7 +119,7 @@ function buildSubchunkCard(subchunk) {
     const meta = el("div", "resource-meta");
     const start = formatDate(heading[SLOTS.startDate]);
     if (start) meta.appendChild(el("div", null, "Début : " + start));
-    meta.appendChild(el("div", null, subchunk.tasks.length + " tâche(s)"));
+    meta.appendChild(el("div", null, subchunk.tasks.length + " actions(s)"));
     card.appendChild(meta);
 
     // List of the task titles, in chain order
