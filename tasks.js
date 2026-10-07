@@ -1,14 +1,15 @@
 // =====================================================
 // Column slots. Rename the values on the right if the
 // slot names in YOUR tasks.js differ from these.
-// (Real columns: titre, type, dependDe, projet, dateEchance)
+// (Real columns: titre, type, dependDe, projet, dateEchance, piecejointe)
 // =====================================================
 const SLOTS = {
     title: "titre",         // titre: text shown for each task
     type: "type",           // type: "Heading" marks the start of a subchunk
     dependOn: "dependDe",   // dependDe: Reference to the predecessor row (0 = none)
-    project: "projet",     // projet: tells apart subchunks with the same title
-    dueDate: "dateEchance"  // dateEchance
+    project: "projet",      // projet: tells apart subchunks with the same title
+    dueDate: "dateEchance", // dateEchance
+    attachment: "piecejointe" // piecejointe: Attachments column holding the PDF
 };
 
 grist.ready({
@@ -17,7 +18,8 @@ grist.ready({
         SLOTS.type,
         SLOTS.dependOn,
         { name: SLOTS.project, optional: true },
-        { name: SLOTS.startDate, optional: true }
+        { name: SLOTS.dueDate, optional: true },
+        { name: SLOTS.attachment, optional: true }
     ],
     requiredAccess: "read table",
     allowSelectBy: true
@@ -101,6 +103,148 @@ function buildSubchunks(records) {
 }
 
 
+// =====================================================
+// PDF viewer (one overlay, created on first use and kept
+// in <body>, so re-rendering the cards never destroys it)
+// =====================================================
+let viewer = null;
+let currentBlobUrl = null;
+let viewRequest = 0;   // guards against out-of-order async results
+
+function hasAttachment(record) {
+    const value = record[SLOTS.attachment];
+    return Array.isArray(value) && value.length > 0;
+}
+
+function releaseBlob() {
+    if (currentBlobUrl) {
+        URL.revokeObjectURL(currentBlobUrl);
+        currentBlobUrl = null;
+    }
+}
+
+function closeViewer() {
+    viewRequest++;                       // cancel any pending load
+    if (!viewer) return;
+    viewer.overlay.hidden = true;
+    viewer.frame.src = "about:blank";
+    releaseBlob();
+}
+
+function ensureViewer() {
+    if (viewer) return viewer;
+
+    const overlay = el("div", "pdf-overlay");
+    overlay.hidden = true;
+
+    const panel = el("div", "pdf-panel");
+    const bar = el("div", "pdf-bar");
+    const title = el("div", "pdf-title");
+    const actions = el("div", "pdf-actions");
+    const closeButton = el("button", "pdf-close", "Fermer");
+    closeButton.type = "button";
+    const status = el("div", "pdf-status");
+    const frame = document.createElement("iframe");
+    frame.className = "pdf-frame";
+    frame.title = "Pièce jointe PDF";
+
+    bar.appendChild(title);
+    bar.appendChild(actions);
+    bar.appendChild(closeButton);
+    panel.appendChild(bar);
+    panel.appendChild(status);
+    panel.appendChild(frame);
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+
+    closeButton.addEventListener("click", closeViewer);
+    overlay.addEventListener("click", function (event) {
+        if (event.target === overlay) closeViewer();   // click on the backdrop
+    });
+    document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") closeViewer();
+    });
+
+    viewer = { overlay, title, actions, status, frame };
+    return viewer;
+}
+
+function addViewerLink(v, label, href) {
+    const link = el("a", "pdf-link", label);
+    link.href = href;
+    link.target = "_blank";
+    link.rel = "noopener";
+    v.actions.appendChild(link);
+}
+
+async function openPdf(task) {
+    if (!hasAttachment(task)) return;
+
+    const myRequest = ++viewRequest;
+    const v = ensureViewer();
+
+    releaseBlob();
+    v.title.textContent = task[SLOTS.title] || "Pièce jointe";
+    v.actions.replaceChildren();
+    v.status.textContent = "Chargement du PDF…";
+    v.status.hidden = false;
+    v.frame.src = "about:blank";
+    v.overlay.hidden = false;
+
+    let directUrl = null;
+
+    try {
+        // A fresh token on every click: tokens expire, so never reuse an old one
+        const tokenInfo = await grist.docApi.getAccessToken({ readOnly: true });
+        directUrl =
+            `${tokenInfo.baseUrl}/attachments/${task[SLOTS.attachment][0]}/download?auth=${tokenInfo.token}`;
+
+        const response = await fetch(directUrl);
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        const data = await response.arrayBuffer();
+
+        if (myRequest !== viewRequest) return;   // closed or replaced meanwhile
+
+        // Grist serves attachments with a restrictive "sandbox" security header,
+        // which can stop the browser's PDF viewer. A local blob URL has no such header.
+        currentBlobUrl = URL.createObjectURL(
+            new Blob([data], { type: "application/pdf" })
+        );
+        v.frame.src = currentBlobUrl;
+        v.status.hidden = true;
+        addViewerLink(v, "Ouvrir dans un onglet", currentBlobUrl);
+
+    } catch (err) {
+        if (myRequest !== viewRequest) return;
+        console.error("Could not load the PDF:", err);
+        v.status.textContent = "Impossible d'afficher le PDF ici.";
+    }
+
+    // Always offer a plain download link (needs no fetch, so no CORS involved)
+    if (directUrl && myRequest === viewRequest) {
+        addViewerLink(v, "Télécharger", directUrl);
+    }
+}
+
+function buildTaskItem(task) {
+    const li = document.createElement("li");
+    const label = task[SLOTS.title] || "(sans titre)";
+
+    if (hasAttachment(task)) {
+        const button = el("button", "task-link", label);
+        button.type = "button";
+        button.title = "Afficher la pièce jointe";
+        button.addEventListener("click", function () {
+            openPdf(task);
+        });
+        li.appendChild(button);
+    } else {
+        li.textContent = label;
+    }
+    return li;
+}
+
+
 function buildSubchunkCard(subchunk) {
     const card = el("div", "resource-card");
     const heading = subchunk.heading;
@@ -115,10 +259,10 @@ function buildSubchunkCard(subchunk) {
     );
     card.appendChild(header);
 
-    // Metadata: start date and number of tasks
+    // Metadata: due date and number of actions
     const meta = el("div", "resource-meta");
-    const start = formatDate(heading[SLOTS.startDate]);
-    if (start) meta.appendChild(el("div", null, "Début : " + start));
+    const due = formatDate(heading[SLOTS.dueDate]);
+    if (due) meta.appendChild(el("div", null, "Échéance : " + due));
     meta.appendChild(el("div", null, subchunk.tasks.length + " actions(s)"));
     card.appendChild(meta);
 
@@ -126,7 +270,7 @@ function buildSubchunkCard(subchunk) {
     if (subchunk.tasks.length > 0) {
         const list = el("ul", "chunk-list");
         for (const task of subchunk.tasks) {
-            list.appendChild(el("li", null, task[SLOTS.title] || "(sans titre)"));
+            list.appendChild(buildTaskItem(task));
         }
         card.appendChild(list);
     }
