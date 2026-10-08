@@ -49,8 +49,11 @@ function el(tag, className, text) {
 
 // Shown in the detail panel and in the console: tells at a glance which tasks.js is running
 // (a browser can keep serving an old copy for a while after a new push to GitHub Pages).
-const VERSION = "v4";
-console.log("tasks.js " + VERSION + " (cartes + panneau Ressources)");
+const VERSION = "v5";
+console.log("tasks.js " + VERSION + " (cartes + panneau Ressources + Markdown)");
+
+// Where this script was loaded from: markdown-it.min.js is expected right next to it
+const SCRIPT_URL = document.currentScript ? document.currentScript.src : location.href;
 
 // Layout styles travel with the script, so the panel works even if style.css is old,
 // cached or not updated. Rules in style.css with the same selectors are harmless.
@@ -64,6 +67,21 @@ console.log("tasks.js " + VERSION + " (cartes + panneau Ressources)");
                    padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,.08);
                    max-height: calc(100vh - 24px); overflow: auto; }
 .resource-detail .resource-description { white-space: pre-line; }
+.resource-detail .resource-description.md { white-space: normal; }
+.resource-description.md > :first-child { margin-top: 0; }
+.resource-description.md > :last-child { margin-bottom: 0; }
+.resource-description.md p { margin: 8px 0; }
+.resource-description.md h1, .resource-description.md h2, .resource-description.md h3,
+.resource-description.md h4, .resource-description.md h5, .resource-description.md h6
+    { font-size: 15px; margin: 14px 0 6px; }
+.resource-description.md ul, .resource-description.md ol { margin: 8px 0; padding-left: 22px; }
+.resource-description.md blockquote { margin: 8px 0; padding-left: 12px; border-left: 3px solid #ddd; color: #666; }
+.resource-description.md code { background: #f0f2f5; padding: 1px 4px; border-radius: 4px; font-size: 90%; }
+.resource-description.md pre { background: #f0f2f5; padding: 10px; border-radius: 6px; overflow: auto; white-space: pre-wrap; }
+.resource-description.md pre code { background: none; padding: 0; }
+.resource-description.md table { border-collapse: collapse; margin: 8px 0; font-size: 13px; }
+.resource-description.md th, .resource-description.md td { border: 1px solid #ddd; padding: 4px 8px; text-align: left; }
+.resource-description.md a { color: #2f6fdb; }
 .resource-detail .version-stamp { margin-top: 14px; font-size: 11px; color: #999; }
 .resource-card.selected { outline: 2px solid #2f6fdb; }
 .empty-state { color: #666; font-style: italic; }
@@ -446,6 +464,92 @@ function ensureLayout() {
     return detailBody;
 }
 
+// =====================================================
+// Markdown rendering of Resources.Description
+// The text comes from the Grist document, and this widget has FULL access, so rendering
+// must never be able to run code. Three layers:
+//  1. markdown-it with html:false (raw HTML in the text is escaped, javascript: links refused);
+//  2. the result is parsed in an inert document and REBUILT with DOM calls from an allow-list
+//     of tags (no innerHTML on the page, no images, no attributes except a validated href);
+//  3. if the library is missing, the plain text is shown (line breaks kept by CSS).
+// =====================================================
+const MARKDOWN_FILE = "markdown-it.min.js";   // markdown-it 14.1.0 (MIT), next to tasks.js
+
+let markdownPromise = null;
+function loadMarkdown() {
+    if (markdownPromise) return markdownPromise;
+    markdownPromise = new Promise(function (resolve) {
+        function ready() {
+            // breaks:true keeps old plain-text descriptions readable (a newline stays a line break)
+            resolve(window.markdownit
+                ? window.markdownit({ html: false, breaks: true, linkify: true })
+                : null);
+        }
+        if (window.markdownit) return ready();
+        const script = document.createElement("script");
+        script.src = new URL(MARKDOWN_FILE, SCRIPT_URL).href;
+        script.onload = ready;
+        script.onerror = function () {
+            console.warn(MARKDOWN_FILE + " not found next to tasks.js: descriptions shown as plain text.");
+            resolve(null);
+        };
+        document.head.appendChild(script);
+    });
+    return markdownPromise;
+}
+
+const MD_TAGS = new Set([
+    "P", "BR", "STRONG", "EM", "B", "I", "DEL", "S", "CODE", "PRE", "BLOCKQUOTE", "HR",
+    "UL", "OL", "LI", "H1", "H2", "H3", "H4", "H5", "H6", "A",
+    "TABLE", "THEAD", "TBODY", "TR", "TH", "TD"
+]);
+const MD_DROP = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "IMG", "SVG", "MATH", "FORM", "INPUT", "TEXTAREA", "SELECT", "BUTTON", "LINK", "META", "BASE"]);
+
+function safeHref(href) {
+    return /^(https?:|mailto:)/i.test(String(href || "").trim()) ? String(href).trim() : null;
+}
+
+// Rebuilds a clean copy of the parsed markdown output: only allowed tags, no attributes
+// except a checked href on links. Disallowed tags are unwrapped (their text is kept),
+// dangerous ones are dropped with their content.
+function cleanNode(source, target) {
+    for (const child of Array.from(source.childNodes)) {
+        if (child.nodeType === Node.TEXT_NODE) {
+            target.appendChild(document.createTextNode(child.textContent));
+        } else if (child.nodeType === Node.ELEMENT_NODE) {
+            const tag = child.tagName.toUpperCase();
+            if (MD_DROP.has(tag)) continue;
+            if (!MD_TAGS.has(tag)) { cleanNode(child, target); continue; }   // unwrap
+            const copy = document.createElement(tag.toLowerCase());
+            if (tag === "A") {
+                const href = safeHref(child.getAttribute("href"));
+                if (!href) { cleanNode(child, target); continue; }           // unsafe link -> plain text
+                copy.setAttribute("href", href);
+                copy.setAttribute("target", "_blank");
+                copy.setAttribute("rel", "noopener noreferrer");
+            }
+            cleanNode(child, copy);
+            target.appendChild(copy);
+        }
+    }
+}
+
+// Puts the description into `node`: rendered markdown, or plain text as a fallback
+function fillDescription(node, text, md) {
+    if (!md) { node.textContent = text; return; }
+    try {
+        const parsed = new DOMParser().parseFromString(md.render(text), "text/html");
+        const clean = document.createDocumentFragment();
+        cleanNode(parsed.body, clean);
+        node.classList.add("md");
+        node.replaceChildren(clean);
+    } catch (err) {
+        console.error("Markdown rendering failed:", err);
+        node.classList.remove("md");
+        node.textContent = text;
+    }
+}
+
 function buildResourceAttachments(resource, tokenInfo) {
     const block = el("div", "attachment");
 
@@ -522,6 +626,13 @@ async function renderDetail() {
         if (myRequest !== detailRequest) return;   // a newer render has started
     }
 
+    // Markdown library (loaded once, only when a description has to be shown)
+    let md = null;
+    if (resource.description) {
+        md = await loadMarkdown();
+        if (myRequest !== detailRequest) return;   // a newer render has started
+    }
+
     const content = el("div", "resource-detail-content");
 
     const header = el("div", "resource-header");
@@ -530,7 +641,9 @@ async function renderDetail() {
     content.appendChild(header);
 
     if (resource.description) {
-        content.appendChild(el("div", "resource-description", resource.description));
+        const description = el("div", "resource-description");
+        fillDescription(description, resource.description, md);
+        content.appendChild(description);
     }
 
     const meta = el("div", "resource-meta");
