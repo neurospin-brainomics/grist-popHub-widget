@@ -47,6 +47,45 @@ function el(tag, className, text) {
     return node;
 }
 
+// Shown in the detail panel and in the console: tells at a glance which tasks.js is running
+// (a browser can keep serving an old copy for a while after a new push to GitHub Pages).
+const VERSION = "v4";
+console.log("tasks.js " + VERSION + " (cartes + panneau Ressources)");
+
+// Layout styles travel with the script, so the panel works even if style.css is old,
+// cached or not updated. Rules in style.css with the same selectors are harmless.
+(function injectStyles() {
+    const style = document.createElement("style");
+    style.textContent = `
+.master-detail { display: grid; grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr);
+                 gap: 20px; align-items: start; }
+.master-detail #resources { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.resource-detail { position: sticky; top: 12px; background: #fff; border-radius: 10px;
+                   padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,.08);
+                   max-height: calc(100vh - 24px); overflow: auto; }
+.resource-detail .resource-description { white-space: pre-line; }
+.resource-detail .version-stamp { margin-top: 14px; font-size: 11px; color: #999; }
+.resource-card.selected { outline: 2px solid #2f6fdb; }
+.empty-state { color: #666; font-style: italic; }
+.fatal-error { margin: 12px 0; padding: 10px 14px; border-radius: 8px;
+               background: #fdecea; color: #8a1c13; font-size: 13px; }
+@media (max-width: 760px) {
+  .master-detail { grid-template-columns: 1fr; }
+  .resource-detail { position: static; }
+}`;
+    document.head.appendChild(style);
+})();
+
+// Any uncaught error is also shown on the page (not only in the console)
+function showFatal(message) {
+    console.error("tasks.js " + VERSION + ":", message);
+    document.body.appendChild(el("div", "fatal-error", "Erreur du widget (" + VERSION + ") : " + message));
+}
+window.addEventListener("error", function (event) { showFatal(event.message); });
+window.addEventListener("unhandledrejection", function (event) {
+    showFatal(String((event.reason && event.reason.message) || event.reason));
+});
+
 // The grist plugin API decodes a Reference cell into a Reference object
 // ({ tableId, rowId }), not a plain number. An empty reference has rowId 0.
 // Plain numbers / numeric text are accepted too.
@@ -391,17 +430,20 @@ function buildSubchunkCard(subchunk) {
 // Resources row is added next to them. It is created here, so tasks.html
 // does not need to change.
 // =====================================================
-let detailPanel = null;
+let detailBody = null;   // the part of the panel that is re-rendered
 
 function ensureLayout() {
-    if (detailPanel) return detailPanel;
+    if (detailBody) return detailBody;
     const cards = document.getElementById("resources");
     const wrapper = el("div", "master-detail");
-    detailPanel = el("aside", "resource-detail");
+    const panel = el("aside", "resource-detail");
+    detailBody = el("div", "resource-detail-body");
+    panel.appendChild(detailBody);
+    panel.appendChild(el("div", "version-stamp", "tasks.js " + VERSION));
     cards.parentNode.insertBefore(wrapper, cards);
     wrapper.appendChild(cards);
-    wrapper.appendChild(detailPanel);
-    return detailPanel;
+    wrapper.appendChild(panel);
+    return detailBody;
 }
 
 function buildResourceAttachments(resource, tokenInfo) {
