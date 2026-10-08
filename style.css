@@ -89,3 +89,16 @@ h1 {
 .pdf-status { padding: 16px; color: #666; }
 .pdf-status[hidden] { display: none; }
 .pdf-frame { flex: 1; width: 100%; border: 0; }
+
+.master-detail { display: grid; grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr);
+                 gap: 20px; align-items: start; }
+.master-detail #resources { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.resource-detail { position: sticky; top: 12px; background: #fff; border-radius: 10px;
+                   padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,.08);
+                   max-height: calc(100vh - 24px); overflow: auto; }
+.resource-detail .resource-description { white-space: pre-line; }
+.resource-card.selected { outline: 2px solid #2f6fdb; }
+@media (max-width: 760px) {
+  .master-detail { grid-template-columns: 1fr; }
+  .resource-detail { position: static; }
+}
