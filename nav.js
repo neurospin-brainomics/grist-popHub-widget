@@ -11,7 +11,7 @@
 // pageId = number after "/p/" in the Grist URL of that page.
 // =====================================================
 (function () {
-    const GRIST_DOC_URL = "http://localhost:8484/o/docs/8bDyvVQdziJm/PopulationCohorts";                    // e.g. "https://grist.myinstitute.fr/o/docs/AbCdEf123/Hub"
+    const GRIST_DOC_URL = "https://grist.numerique.gouv.fr/o/cellpop/gk1rkDZEx4LS/PopulationCohorts";                    // e.g. "https://grist.myinstitute.fr/o/docs/AbCdEf123/Hub"
     const URL_SUFFIX = "?style=singlePage";
     const OPEN_IN = "top";
 
